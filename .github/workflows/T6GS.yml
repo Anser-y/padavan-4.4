@@ -24,7 +24,7 @@ jobs:
           - build_variant: "mt7621"
             targets: "360-T6GS"
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Prepare environment
         run: |
           sudo apt update
@@ -39,6 +39,8 @@ jobs:
         run: |
           cd trunk
           mkdir -p ${images_dir}
+          # 清理源码树，确保 board.h 修改强行生效
+          ./clear_tree >/dev/null 2>&1 || true
           for m in $targets; do fakeroot ./build_firmware_ci $m; \
           if [ $? = 0 ]; then cp -f images/*.trx ${images_dir}/$m.trx; else exit 1; fi; \
           ./clear_tree_simple >/dev/null 2>&1; done
@@ -57,6 +59,7 @@ jobs:
           name: ${{ env.image_name }}
           path: ${{ env.images_dir }}/*.7z
       - name: Upload firmware to WeTransfer
+        continue-on-error: true
         run: |
           curl -fsSL git.io/file-transfer | sh
           ./transfer wet -s -p 16 --no-progress /opt/images/*.trx 2>&1 | tee wetransfer.log
