@@ -29,12 +29,3 @@
 #define BOARD_GPIO_LED_STATUS_RED	13
 #define BOARD_GPIO_LED_STATUS_BLUE	10
 
-/* 强制指定 LAN 与 WAN 的 MAC */
-#define BOARD_CONFIG_DEFAULT_MAC "02:29:F4:7A:B1:C8"
-
-/* 设置无线 MAC 偏移量（让 Wi-Fi MAC 基于主 MAC 自动递增） */
-#define BOARD_CONFIG_WIFI_MAC_OFFSET 1
-
-/* 显式定义 2.4G 和 5G 的独立 MAC */
-#define BOARD_CONFIG_WIFI2_MAC "02:29:F4:7A:B1:C9"
-#define BOARD_CONFIG_WIFI5_MAC "02:29:F4:7A:B1:CA"
