@@ -1,6 +1,5 @@
 name: 360T6GS
 
-# Controls when the action will run. 
 on: 
   push:
   pull_request:
@@ -8,7 +7,6 @@ on:
   release:
     types: [published]
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   build:
     name: build
@@ -25,25 +23,53 @@ jobs:
             targets: "360-T6GS"
     steps:
       - uses: actions/checkout@v4
+
       - name: Prepare environment
         run: |
           sudo apt update
           sudo apt install libtool-bin gperf python3-docutils autopoint gettext libltdl-dev
+
+      - name: Inject Random MAC into board.h
+        run: |
+          GEN_MAC() {
+              printf '02:%02X:%02X:%02X:%02X:%02X' \
+                  $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256)) $((RANDOM%256))
+          }
+          
+          MAC_MAIN=$(GEN_MAC)
+          MAC_24G=$(GEN_MAC)
+          MAC_5G=$(GEN_MAC)
+          
+          echo "Generated MACs for this build:"
+          echo "Main MAC: $MAC_MAIN"
+          echo "2.4G MAC: $MAC_24G"
+          echo "5G MAC:   $MAC_5G"
+          
+          BOARD_HEADER="trunk/configs/boards/360-T6GS/board.h"
+          echo "" >> $BOARD_HEADER
+          echo "/* Auto Generated Random MACs */" >> $BOARD_HEADER
+          echo "#define BOARD_CONFIG_DEFAULT_MAC \"$MAC_MAIN\"" >> $BOARD_HEADER
+          echo "#define BOARD_CONFIG_WIFI_MAC_OFFSET 1" >> $BOARD_HEADER
+          echo "#define BOARD_CONFIG_WIFI2_MAC \"$MAC_24G\"" >> $BOARD_HEADER
+          echo "#define BOARD_CONFIG_WIFI5_MAC \"$MAC_5G\"" >> $BOARD_HEADER
+
       - name: Run shellcheck
         run: sh ./trunk/tools/shellcheck.sh
+
       - name: Prepare toolchain
         run: |
           cd toolchain-mipsel
           sh dl_toolchain.sh
+
       - name: Start build
         run: |
           cd trunk
           mkdir -p ${images_dir}
-          # 清理源码树，确保 board.h 修改强行生效
           ./clear_tree >/dev/null 2>&1 || true
           for m in $targets; do fakeroot ./build_firmware_ci $m; \
           if [ $? = 0 ]; then cp -f images/*.trx ${images_dir}/$m.trx; else exit 1; fi; \
           ./clear_tree_simple >/dev/null 2>&1; done
+
       - name: Create archive
         if: ${{ github.event_name != 'release' && success() }}
         run: |
@@ -52,18 +78,21 @@ jobs:
           image_name=images_${build_variant}_${GIT_VERSION} || image_name=images_${build_variant}
           cd ${images_dir}; md5sum *.trx |tee md5sum.txt; 7z a -mx=9 ${image_name}.7z ./*
           echo "image_name=${image_name}" >> $GITHUB_ENV
+
       - name: Upload images to Artifact
         if: ${{ github.event_name != 'release' && success() }}
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.image_name }}
           path: ${{ env.images_dir }}/*.7z
+
       - name: Upload firmware to WeTransfer
         continue-on-error: true
         run: |
           curl -fsSL git.io/file-transfer | sh
           ./transfer wet -s -p 16 --no-progress /opt/images/*.trx 2>&1 | tee wetransfer.log
           echo "::warning file=wetransfer.com::$(cat wetransfer.log | grep https)"
+
       - name: Upload images to Releases
         if: ${{ github.event_name == 'release' && success() }}
         uses: svenstaro/upload-release-action@2.2.0
